@@ -134,3 +134,49 @@ async def test_connect_once_falls_back_to_legacy_websockets_header_keyword(monke
 
     assert "additional_headers" in calls[0]
     assert calls[1]["extra_headers"] == {"Authorization": "Bearer dev-key"}
+
+
+def test_constructor_reads_defaults_from_dotenv(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("LABOS_URL", raising=False)
+    monkeypatch.delenv("LABOS_API_KEY", raising=False)
+    monkeypatch.delenv("LABOS_DEVICE_ID", raising=False)
+    tmp_path.joinpath(".env").write_text(
+        "\n".join(
+            [
+                "LABOS_URL=ws://dotenv.example/remote",
+                "LABOS_API_KEY=dotenv-key",
+                "LABOS_DEVICE_ID=dotenv-device",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    mcp = RemoteMCP()
+
+    assert mcp.url == "ws://dotenv.example/remote"
+    assert mcp.api_key == "dotenv-key"
+    assert mcp.device_id == "dotenv-device"
+
+
+def test_constructor_arguments_override_dotenv(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("LABOS_URL", raising=False)
+    monkeypatch.delenv("LABOS_API_KEY", raising=False)
+    monkeypatch.delenv("LABOS_DEVICE_ID", raising=False)
+    tmp_path.joinpath(".env").write_text(
+        "\n".join(
+            [
+                "LABOS_URL=ws://dotenv.example/remote",
+                "LABOS_API_KEY=dotenv-key",
+                "LABOS_DEVICE_ID=dotenv-device",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    mcp = RemoteMCP(url="ws://argument.example/remote", api_key="argument-key", device_id="argument-device")
+
+    assert mcp.url == "ws://argument.example/remote"
+    assert mcp.api_key == "argument-key"
+    assert mcp.device_id == "argument-device"

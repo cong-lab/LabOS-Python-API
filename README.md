@@ -2,10 +2,10 @@
 
 `labos.mcp` lets a local device expose Python functions to a remote relay over WebSockets with a FastMCP-style decorator API. It is designed for tools that run behind NAT or firewalls, such as laptops, robots, instruments, desktop apps, and local lab services.
 
-```mermaid
-flowchart LR
-    Device["@mcp.tool() functions"] -->|"WSS Authorization Bearer"| Relay
-    Relay -->|"tool.call / tool.result"| Agent["LangChain agent"]
+```text
++-----------------------+     WSS Authorization Bearer     +-------------+     tool.call / tool.result      +-----------------+
+| @mcp.tool() functions | -------------------------------> | LabOS relay | -------------------------------> | LangChain agent |
++-----------------------+                                  +-------------+                                  +-----------------+
 ```
 
 The local device opens an outbound WebSocket connection, registers its tools, and waits for calls. The relay authenticates the device, forwards agent tool calls, and streams results, progress, warnings, files, approvals, and fatal device events back to the agent framework.
@@ -18,6 +18,12 @@ Install the library for local development:
 pip install -e .
 ```
 
+Install directly from GitHub:
+
+```shell
+pip install "git+https://github.com/cong-lab/LabOS-Python-API.git"
+```
+
 Install the example relay dependencies, including `aiohttp` for the upload side-channel and LangChain packages for the optional agent demo:
 
 ```shell
@@ -27,6 +33,24 @@ pip install -e ".[examples]"
 ## Quickstart
 
 Create a remote tool client with `RemoteMCP`, decorate functions with `@mcp.tool()`, and call `mcp.run()` to connect to the relay.
+
+The more secure way to configure the client is with a local `.env` file. By default, the LabOS SDK reads `.env` from the current working directory if it exists and ignores it if it does not. Copy `.env.example` and set:
+
+```shell
+LABOS_URL=wss://example.com/remote
+LABOS_API_KEY=your-tool-key
+LABOS_DEVICE_ID=demo-device
+```
+
+Then initialize the client without embedding credentials in source code:
+
+```python
+from labos.mcp import RemoteMCP
+
+mcp = RemoteMCP()
+```
+
+You can also pass values directly. Constructor arguments always override values from `.env`.
 
 ```python
 from labos.mcp import RemoteMCP

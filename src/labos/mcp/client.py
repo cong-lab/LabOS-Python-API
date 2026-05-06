@@ -5,12 +5,14 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
+import os
 import socket
 import threading
 import uuid
 from collections.abc import Awaitable, Callable
 from collections import OrderedDict
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Literal, TypeVar
 
 import websockets
@@ -52,8 +54,8 @@ class RemoteMCP:
 
     def __init__(
         self,
-        url: str,
-        api_key: str,
+        url: str | None = None,
+        api_key: str | None = None,
         *,
         device_id: str | None = None,
         name: str = "labos-device",
@@ -63,9 +65,17 @@ class RemoteMCP:
         idempotency_cache_size: int = 256,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        self.url = url
-        self.api_key = api_key
-        self.device_id = device_id or _default_device_id()
+        dotenv = _load_dotenv()
+        resolved_url = _resolve_config_value(url, "LABOS_URL", dotenv)
+        resolved_api_key = _resolve_config_value(api_key, "LABOS_API_KEY", dotenv)
+        if resolved_url is None:
+            raise ValueError("RemoteMCP requires a url argument or LABOS_URL in the environment or .env file.")
+        if resolved_api_key is None:
+            raise ValueError("RemoteMCP requires an api_key argument or LABOS_API_KEY in the environment or .env file.")
+
+        self.url = resolved_url
+        self.api_key = resolved_api_key
+        self.device_id = _resolve_config_value(device_id, "LABOS_DEVICE_ID", dotenv) or _default_device_id()
         self.name = name
         self.reconnect = reconnect
         self.ping_interval = ping_interval
@@ -423,3 +433,40 @@ def _connect_websocket(url: str, *, headers: dict[str, str], ping_interval: floa
 
 def _default_device_id() -> str:
     return f"{socket.gethostname()}-{uuid.getnode():x}"
+
+
+def _resolve_config_value(explicit: str | None, env_var: str, dotenv: dict[str, str]) -> str | None:
+    if explicit is not None:
+        return explicit
+    return os.environ.get(env_var) or dotenv.get(env_var)
+
+
+def _load_dotenv(path: str | Path = ".env") -> dict[str, str]:
+    dotenv_path = Path(path)
+    if not dotenv_path.is_file():
+        return {}
+
+    values: dict[str, str] = {}
+    for line in dotenv_path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped.startswith("export "):
+            stripped = stripped[len("export ") :].lstrip()
+
+        key, separator, raw_value = stripped.partition("=")
+        if not separator:
+            continue
+
+        key = key.strip()
+        if not key:
+            continue
+
+        values[key] = _parse_dotenv_value(raw_value.strip())
+    return values
+
+
+def _parse_dotenv_value(value: str) -> str:
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        return value[1:-1]
+    return value.split(" #", 1)[0].rstrip()
